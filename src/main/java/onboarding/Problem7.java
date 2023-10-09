@@ -5,105 +5,90 @@ import java.util.stream.Collectors;
 
 public class Problem7 {
 
-    static FriendShip friendShip = new FriendShip();
-    static Recommendation recommendation = new Recommendation();
+    static final int RELATED_POINT = 10;
+    static final int VISITED_POINT = 1;
 
+    static Map<String, Set<String>> friendRelation;
+    static Map<String, Integer> recommendedScore;
     public static List<String> solution(String user, List<List<String>> friends, List<String> visitors) {
-        //friendShip 친구 정보 주입
-        friendShip.createFriendShip(friends);
-        return recommendation.recommendUsers(user, friendShip.createRecommendedScore(user, visitors));
+        storeFriendRelation(friends);
+        calculateRecommendedScore(user, visitors);
+        System.out.println("recommendedScore = " + recommendedScore);
+
+        return RecommendFromScore();
     }
 
-    enum Point{
-        RELATED_POINT(10),
-        VISITED_POINT(1);
-
-        private final int point;
-        Point(int point) {
-            this.point = point;
-        }
+    private static void calculateRecommendedScore(String user, List<String> visitors) {
+        recommendedScore = new HashMap<>();
+        
+        calculateRelationScore(user);
+        calculateVisitedScore(user, visitors);
     }
 
-    static class FriendShip{
+    private static void calculateVisitedScore(String user, List<String> visitors) {
+        Set<String> userFriends = friendRelation.get(user);
 
-        private Map<String, Set<String>> friendShip;
-        private Map<String, Integer> recommendedScore;
-
-        public FriendShip(){
-            friendShip = new HashMap<>();
-            recommendedScore = new HashMap<>();
-        }
-
-        public Map<String, Set<String>> createFriendShip(List<List<String>> friends){
-            friendShip = new HashMap<>();
-
-            for (List<String> friend : friends) {
-                String name1 = friend.get(0);
-                String name2 = friend.get(1);
-                connect(name1, name2);
-                connect(name2, name1);
-            }
-            return friendShip;
-        }
-
-        private void connect(String user, String friend){
-            //user가 friendShip map에 등록되어있다면 friend만 추가
-            //등록 x있다면 HashSet 공간 할당해주고 set(user,friend)추가
-            friendShip.computeIfAbsent(user, s->new HashSet<>()).add(friend);
-        }
-
-        public Map<String, Integer> createRecommendedScore(String user, List<String> visitors){
-            recommendedScore = new HashMap<>();
-
-            for(String other : friendShip.keySet()){
-                relatedFriends(user, other);
-            }
-
-            for (String visitor : visitors) {
-                addVisitedScore(user, visitor);
-            }
-
-            return recommendedScore;
-        }
-
-        private void relatedFriends(String user, String other) {
-            Set<String> userFriends = friendShip.getOrDefault(user, new HashSet<>());
-            for (String friend : friendShip.get(other)) {
-                addRelatedScore(other, userFriends, friend);
-                //other: friendShip에 등록된 모든 key값
-                //userFriend : userfriend 목록들
-                //friend other의 friend
-            }
-        }
-
-        private void addRelatedScore(String other, Set<String> userFriends, String friend) {
-            //user는 친추 x, user의 friend가 친추 o
-            if(!userFriends.contains(other) && userFriends.contains(friend)){
-                recommendedScore.put(other,
-                        recommendedScore.getOrDefault(other, 0)
-                                +Point.RELATED_POINT.point);
-            }
-        }
-
-        private void addVisitedScore(String user, String visitor) {
-            Set<String> userFriends = friendShip.getOrDefault(user, new HashSet<>());
+        for (String visitor : visitors) {
             if(!userFriends.contains(visitor)){
                 recommendedScore.put(visitor,
-                        recommendedScore.getOrDefault(visitor,0) + Point.VISITED_POINT.point);
+                        recommendedScore.getOrDefault(visitor, 0) + VISITED_POINT);
             }
         }
     }
 
-    static class Recommendation {
+    private static void calculateRelationScore(String user) {
+        //user의 friend 목록들 검사
+        Set<String> userFriends = friendRelation.get(user);
 
-        public List<String> recommendUsers(String user, Map<String, Integer> recommendedScore) {
-            return recommendedScore.entrySet().stream()
-                    .filter(entry -> !entry.getKey().equals(user) && entry.getValue() != 0)
-                    .sorted(Map.Entry.<String, Integer>comparingByValue(Collections.reverseOrder())
-                            .thenComparing(Map.Entry::getKey))
-                    .limit(5)
-                    .map(Map.Entry::getKey)
-                    .collect(Collectors.toList());
+        for (String userFriend : userFriends) {
+            checkUserFriendList(userFriends,userFriend, user);
         }
     }
+
+    ////////////////////////////////친구 관계 확인
+    private static void checkUserFriendList(Set<String> userFriends,String userFriend, String user) {
+
+        //other는 userFriend의 친구
+        Set<String> others = friendRelation.get(userFriend);
+        others.remove(user); //userFriend 목록에 user도 포함되어 있으므로 제거
+
+        for (String other : others) {
+            userFriendIsNotOther(userFriends, other);
+        }
+    }
+
+    private static void userFriendIsNotOther(Set<String> userFriends, String other) {
+        if(!userFriends.contains(other)){
+            recommendedScore.put(other,
+                    recommendedScore.getOrDefault(other, 0) + RELATED_POINT );
+        }
+    }
+
+    private static void storeFriendRelation(List<List<String>> friends) {
+
+        friendRelation = new HashMap<>();
+
+        for (List<String> friend : friends) {
+            String friend1 = friend.get(0);
+            String friend2 = friend.get(1);
+
+            connectFriend(friend1, friend2);
+            connectFriend(friend2, friend1);
+        }
+    }
+
+    private static void connectFriend(String friend1, String friend2) {
+        friendRelation.computeIfAbsent(friend1,s->new HashSet<>()).add(friend2);
+    }
+
+    private static List<String> RecommendFromScore() {//점수 결과로 추천
+        return recommendedScore.entrySet()
+                .stream()
+                .sorted(Map.Entry.<String, Integer>comparingByValue(Collections.reverseOrder())
+                        .thenComparing(Map.Entry::getKey))
+                .limit(5)
+                .map(Map.Entry::getKey)
+                .collect(Collectors.toList());
+    }
+
 }
